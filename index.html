@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ALJOUF 6070 — DCF Valuation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--surface3:#21262d;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#e6edf3;--muted:#8b949e;--muted2:#6e7681;
+  --green:#3fb950;--green-dim:rgba(63,185,80,0.12);--green-dim2:rgba(63,185,80,0.2);
+  --red:#f85149;--red-dim:rgba(248,81,73,0.12);
+  --amber:#d29922;--amber-dim:rgba(210,153,34,0.15);
+  --blue:#58a6ff;--blue-dim:rgba(88,166,255,0.12);
+  --radius:8px;--radius-lg:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Instrument Sans',sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+
+.header{position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;gap:1rem;height:56px;flex-wrap:wrap}
+.h-ticker{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;background:var(--green-dim2);color:var(--green);border:1px solid rgba(63,185,80,0.3);padding:3px 10px;border-radius:4px;letter-spacing:.06em;white-space:nowrap}
+.h-name{font-family:'DM Serif Display',serif;font-size:17px;color:var(--text);white-space:nowrap}
+.h-price{margin-left:auto;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+.h-price span{color:var(--text);font-weight:500}
+.h-btns{display:flex;gap:6px}
+.btn{padding:6px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'Instrument Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--surface3)}
+.btn-green{background:var(--green-dim2);border-color:rgba(63,185,80,0.4);color:var(--green);font-weight:600}
+.btn-green:hover{background:rgba(63,185,80,0.3)}
+
+.layout{position:relative;z-index:1;display:grid;grid-template-columns:250px 1fr 270px;min-height:calc(100vh - 56px)}
+
+.left-panel{border-right:1px solid var(--border);padding:1.25rem 1rem;overflow-y:auto;position:sticky;top:56px;height:calc(100vh - 56px)}
+.plabel{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted2);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.plabel::after{content:'';flex:1;height:1px;background:var(--border)}
+.ig{margin-bottom:9px}
+.ig label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;font-family:'DM Mono',monospace}
+.ig input{width:100%;height:31px;padding:0 9px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;transition:border-color .15s}
+.ig input:focus{outline:none;border-color:rgba(63,185,80,0.5)}
+.ig input.locked{color:var(--muted);cursor:default;background:var(--surface)}
+.ig input.assm{border-color:rgba(210,153,34,0.3);background:rgba(210,153,34,0.04)}
+.ig input.assm:focus{border-color:rgba(210,153,34,0.6)}
+.ig input.scenario-input{font-family:'Instrument Sans',sans-serif;background:var(--surface2);border:1px dashed var(--border2)}
+
+.main{padding:1.25rem 1.5rem;overflow-y:auto}
+.tabs{display:flex;gap:4px;margin-bottom:1.25rem;border-bottom:1px solid var(--border);padding-bottom:10px}
+.tab{padding:5px 14px;border-radius:var(--radius);border:1px solid transparent;background:transparent;color:var(--muted);font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--surface2);border-color:var(--border2);color:var(--text)}
+.sec{display:none}
+.sec.show{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin-bottom:1.25rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:13px}
+.card-lbl{font-size:10px;color:var(--muted2);font-family:'DM Mono',monospace;letter-spacing:.04em;text-transform:uppercase;margin-bottom:5px}
+.card-val{font-family:'DM Serif Display',serif;font-size:21px;color:var(--text);line-height:1}
+.card-note{font-size:11px;color:var(--muted);margin-top:4px}
+.card-note.up{color:var(--green)}.card-note.dn{color:var(--red)}.card-note.neu{color:var(--amber)}
+
+.verdict{border-radius:var(--radius-lg);padding:13px 15px;margin-bottom:1.25rem;font-size:13px;line-height:1.7;border:1px solid}
+.verdict.up{background:var(--green-dim);border-color:rgba(63,185,80,0.25)}
+.verdict.dn{background:var(--red-dim);border-color:rgba(248,81,73,0.25)}
+.verdict.neu{background:var(--amber-dim);border-color:rgba(210,153,34,0.25)}
+
+.sec-h{font-family:'DM Serif Display',serif;font-size:17px;color:var(--text);margin-bottom:.9rem;display:flex;align-items:baseline;gap:8px}
+.sec-h small{font-family:'Instrument Sans',sans-serif;font-size:11px;color:var(--muted);font-weight:400}
+
+.tbl-wrap{overflow-x:auto;margin-bottom:1.25rem}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:right;padding:7px 9px;border-bottom:1px solid var(--border);font-weight:500;font-size:10px;color:var(--muted2);font-family:'DM Mono',monospace;letter-spacing:.04em;text-transform:uppercase}
+th:first-child{text-align:left}
+td{padding:6px 9px;border-bottom:1px solid var(--border);text-align:right;color:var(--text);font-family:'DM Mono',monospace}
+td:first-child{text-align:left;color:var(--muted);font-family:'Instrument Sans',sans-serif}
+tr:last-child td{border-bottom:none}
+tr.bold td{font-weight:600;color:var(--text)}
+tr.hl td{background:var(--surface2)}
+tr:hover td{background:rgba(255,255,255,0.02)}
+
+.sens{border-collapse:collapse;min-width:100%;font-size:11px}
+.sens th,.sens td{padding:6px 10px;border:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace}
+.sens th{background:var(--surface2);color:var(--muted2);font-size:10px;letter-spacing:.04em}
+.s-hi{background:rgba(63,185,80,0.18);color:#7ee787;font-weight:600}
+.s-mid{background:rgba(210,153,34,0.15);color:#e3b341;font-weight:600}
+.s-lo{background:rgba(248,81,73,0.15);color:#ff7b72;font-weight:600}
+.s-cur{outline:2px solid var(--green);outline-offset:-2px}
+
+.cw{position:relative;width:100%;margin-bottom:1.25rem}
+.note-bar{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 11px;font-size:11px;color:var(--muted);margin-bottom:1rem;line-height:1.6}
+.note-bar strong{color:var(--amber)}
+.sens-title{font-size:12px;color:var(--muted);margin-bottom:7px;font-weight:500}
+
+.right-panel{border-left:1px solid var(--border);padding:1.25rem 1rem;overflow-y:auto;position:sticky;top:56px;height:calc(100vh - 56px)}
+.hist-empty{color:var(--muted2);font-size:12px;text-align:center;padding:2rem 0;line-height:1.9}
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:11px;margin-bottom:7px;cursor:pointer;transition:border-color .15s;position:relative}
+.hist-item:hover{border-color:var(--border2)}
+.hist-item.active-scenario{border-color:rgba(63,185,80,0.5);background:rgba(63,185,80,0.04)}
+.hist-ticker{font-family:'DM Mono',monospace;font-size:10px;color:var(--green);margin-bottom:2px;letter-spacing:.06em}
+.hist-iv{font-family:'DM Serif Display',serif;font-size:19px;color:var(--text);margin:3px 0}
+.hist-signal{font-size:11px;font-weight:600}
+.hist-signal.up{color:var(--green)}.hist-signal.dn{color:var(--red)}.hist-signal.neu{color:var(--amber)}
+.hist-meta{font-size:10px;color:var(--muted2);font-family:'DM Mono',monospace;margin-top:2px}
+.hist-name{font-size:11px;color:var(--muted);margin-top:3px;font-style:italic}
+.hist-del{position:absolute;top:8px;right:9px;background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px;line-height:1;padding:2px 4px;border-radius:4px}
+.hist-del:hover{color:var(--red);background:var(--red-dim)}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <span class="h-ticker">TADAWUL: 6070</span>
+  <span class="h-name">Al-Jouf Agricultural Development</span>
+  <div class="h-price">Price <span id="hdr-price">SAR 57.30</span></div>
+  <div class="h-btns">
+    <button class="btn btn-green" onclick="runDCF()">▶ Run DCF</button>
+    <button class="btn" onclick="saveScenario()">⊕ Save scenario</button>
+    <button class="btn" onclick="clearAll()" title="Clear history">⊘ Clear all</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT INPUTS -->
+  <aside class="left-panel">
+    <div class="plabel">2024 Actuals</div>
+    <div class="ig"><label>Revenue (SAR M)</label><input class="locked" readonly value="582.8"/></div>
+    <div class="ig"><label>EBIT (SAR M)</label><input class="locked" readonly value="84.8"/></div>
+    <div class="ig"><label>Net income (SAR M)</label><input class="locked" readonly value="75.3"/></div>
+    <div class="ig"><label>EBITDA (SAR M)</label><input class="locked" readonly value="174.2"/></div>
+    <div class="ig"><label>Shares outstanding (M)</label><input class="locked" readonly value="30"/></div>
+    <div class="ig"><label>Current price (SAR)</label><input class="assm" id="price" value="57.30" oninput="document.getElementById('hdr-price').textContent='SAR '+this.value"/></div>
+
+    <div class="plabel" style="margin-top:1rem">Revenue Growth (%)</div>
+    <div class="ig"><label>Year 1</label><input class="assm" id="g1" value="15"/></div>
+    <div class="ig"><label>Year 2</label><input class="assm" id="g2" value="12"/></div>
+    <div class="ig"><label>Year 3</label><input class="assm" id="g3" value="10"/></div>
+    <div class="ig"><label>Year 4</label><input class="assm" id="g4" value="8"/></div>
+    <div class="ig"><label>Year 5</label><input class="assm" id="g5" value="7"/></div>
+
+    <div class="plabel" style="margin-top:1rem">Margins & Reinvestment</div>
+    <div class="ig"><label>EBIT margin (%)</label><input class="assm" id="ebit_m" value="14.5"/></div>
+    <div class="ig"><label>Zakat / tax rate (%)</label><input class="assm" id="tax_r" value="2.5"/></div>
+    <div class="ig"><label>D&A % of revenue</label><input class="assm" id="da_p" value="15.3"/></div>
+    <div class="ig"><label>CAPEX % of revenue</label><input class="assm" id="cap_p" value="18.0"/></div>
+    <div class="ig"><label>ΔWC % of ΔRevenue</label><input class="assm" id="wc_p" value="8.0"/></div>
+
+    <div class="plabel" style="margin-top:1rem">Discount & Terminal</div>
+    <div class="ig"><label>WACC (%)</label><input class="assm" id="wacc" value="9.5"/></div>
+    <div class="ig"><label>Terminal growth rate (%)</label><input class="assm" id="tgr" value="3.0"/></div>
+    <div class="ig"><label>Net debt (SAR M)</label><input class="assm" id="netdebt" value="120"/></div>
+
+    <div class="plabel" style="margin-top:1rem">Scenario Label</div>
+    <div class="ig"><input class="scenario-input" id="scenName" placeholder="e.g. Bull case 2025" style="width:100%;height:31px;padding:0 9px;border-radius:var(--radius);color:var(--text);font-size:12px"/></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="tabs">
+      <button class="tab active" onclick="sw('summary')">Summary</button>
+      <button class="tab" onclick="sw('dcf')">DCF Model</button>
+      <button class="tab" onclick="sw('sensitivity')">Sensitivity</button>
+    </div>
+
+    <!-- SUMMARY -->
+    <div id="tab-summary" class="sec show">
+      <div class="sec-h">Valuation Summary <small>FY2024 base · SAR millions</small></div>
+      <div class="cards">
+        <div class="card"><div class="card-lbl">Intrinsic Value / Share</div><div class="card-val" id="c-iv">—</div><div class="card-note" id="c-iv-note">Run DCF</div></div>
+        <div class="card"><div class="card-lbl">Current Price</div><div class="card-val" id="c-pr">SAR 57.30</div><div class="card-note neu">Tadawul 6070</div></div>
+        <div class="card"><div class="card-lbl">Upside / Downside</div><div class="card-val" id="c-up">—</div><div class="card-note" id="c-up-note">—</div></div>
+        <div class="card"><div class="card-lbl">Enterprise Value</div><div class="card-val" id="c-ev">—</div><div class="card-note">DCF-derived</div></div>
+        <div class="card"><div class="card-lbl">PV of FCFFs</div><div class="card-val" id="c-pvf">—</div><div class="card-note">5-year sum</div></div>
+        <div class="card"><div class="card-lbl">TV Share of EV</div><div class="card-val" id="c-tv">—</div><div class="card-note">Terminal value %</div></div>
+      </div>
+      <div id="verdict"></div>
+      <div class="sec-h" style="margin-top:.25rem">Multiples Cross-Check</div>
+      <div class="tbl-wrap"><table id="mult-tbl">
+        <thead><tr><th>Multiple</th><th>Market Implied</th><th>DCF Implied</th><th>Delta</th><th>Note</th></tr></thead>
+        <tbody><tr><td colspan="5" style="color:var(--muted2);text-align:center;padding:18px">Run DCF first</td></tr></tbody>
+      </table></div>
+      <div class="sec-h">Value Bridge</div>
+      <div class="cw" style="height:210px"><canvas id="bridgeChart" role="img" aria-label="DCF value bridge chart"></canvas></div>
+    </div>
+
+    <!-- DCF MODEL -->
+    <div id="tab-dcf" class="sec">
+      <div class="sec-h">Free Cash Flow Projections <small>5-year explicit period</small></div>
+      <div class="note-bar"><strong>Zakat note:</strong> Saudi agricultural companies pay Zakat (~2.5%) instead of standard corporate income tax. This materially increases NOPAT vs a typical 20% tax assumption.</div>
+      <div class="tbl-wrap"><table id="dcf-tbl">
+        <thead><tr><th>Line (SAR M)</th><th>2024A</th><th>Y1</th><th>Y2</th><th>Y3</th><th>Y4</th><th>Y5</th></tr></thead>
+        <tbody><tr><td colspan="7" style="color:var(--muted2);text-align:center;padding:18px">Run DCF to populate</td></tr></tbody>
+      </table></div>
+      <div class="sec-h">Present Value Buildup</div>
+      <div class="tbl-wrap"><table id="pv-tbl">
+        <thead><tr><th>Item</th><th>SAR M</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="sec-h">Revenue & FCFF Projection</div>
+      <div class="cw" style="height:270px"><canvas id="projChart" role="img" aria-label="5-year revenue and FCFF chart"></canvas></div>
+    </div>
+
+    <!-- SENSITIVITY -->
+    <div id="tab-sensitivity" class="sec">
+      <div class="sec-h">Sensitivity Analysis</div>
+      <div class="note-bar">
+        <span style="background:rgba(63,185,80,0.18);color:#7ee787;padding:1px 7px;border-radius:3px;font-family:'DM Mono',monospace;font-size:10px">Green</span> ≥20% upside &nbsp;
+        <span style="background:rgba(210,153,34,0.15);color:#e3b341;padding:1px 7px;border-radius:3px;font-family:'DM Mono',monospace;font-size:10px">Amber</span> −5% to +20% &nbsp;
+        <span style="background:rgba(248,81,73,0.15);color:#ff7b72;padding:1px 7px;border-radius:3px;font-family:'DM Mono',monospace;font-size:10px">Red</span> overvalued &nbsp;
+        <strong>Bold border</strong> = current assumptions
+      </div>
+      <div class="sens-title">Intrinsic value / share — WACC vs Terminal Growth Rate</div>
+      <div class="tbl-wrap"><table class="sens" id="sens1"></table></div>
+      <div class="sens-title" style="margin-top:1.25rem">Intrinsic value / share — WACC vs Year 1 Revenue Growth</div>
+      <div class="tbl-wrap"><table class="sens" id="sens2"></table></div>
+    </div>
+  </main>
+
+  <!-- RIGHT HISTORY -->
+  <aside class="right-panel">
+    <div class="plabel">Scenario History</div>
+    <div id="hist-list">
+      <div class="hist-empty">No scenarios saved yet.<br>Run DCF, then click<br><strong style="color:var(--text)">⊕ Save scenario</strong></div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+const charts={};
+function sw(n){
+  ['summary','dcf','sensitivity'].forEach((id,i)=>{
+    document.getElementById('tab-'+id).classList.toggle('show',id===n);
+    document.querySelectorAll('.tab')[i].classList.toggle('active',id===n);
+  });
+}
+const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+const f=(n,d=1)=>isNaN(n)||!isFinite(n)?'—':n.toFixed(d);
+const fc=n=>{if(isNaN(n)||!isFinite(n))return'—';return n<0?'('+Math.abs(n).toFixed(1)+')':n.toFixed(1)};
+
+function computeDCF(ov={}){
+  const wacc=(ov.wacc??g('wacc'))/100,tgr=(ov.tgr??g('tgr'))/100;
+  const gs=[ov.g1??g('g1'),ov.g2??g('g2'),g('g3'),g('g4'),g('g5')].map(x=>x/100);
+  const em=g('ebit_m')/100,tr=g('tax_r')/100,dap=g('da_p')/100,cap=g('cap_p')/100,wcp=g('wc_p')/100;
+  let prev=582.8,revs=[],ebits=[],nopats=[],das=[],capexs=[],dwcs=[],fcffs=[],pvs=[];
+  for(let i=0;i<5;i++){
+    const rev=prev*(1+gs[i]),ebit=rev*em,nopat=ebit*(1-tr),da=rev*dap,capex=rev*cap,dwc=(rev-prev)*wcp,fcff=nopat+da-capex-dwc;
+    revs.push(rev);ebits.push(ebit);nopats.push(nopat);das.push(da);capexs.push(capex);dwcs.push(dwc);fcffs.push(fcff);
+    pvs.push(fcff/Math.pow(1+wacc,i+1));prev=rev;
+  }
+  const tv=fcffs[4]*(1+tgr)/(wacc-tgr),pvTV=tv/Math.pow(1+wacc,5),sumPV=pvs.reduce((a,b)=>a+b,0);
+  const ev=sumPV+pvTV,equity=ev-g('netdebt'),intrinsic=equity/30;
+  return{revs,ebits,nopats,das,capexs,dwcs,fcffs,pvs,tv,pvTV,sumPV,ev,equity,intrinsic};
+}
+
+function mkChart(id,type,labels,datasets,opts={}){
+  if(charts[id])charts[id].destroy();
+  const ctx=document.getElementById(id)?.getContext('2d');
+  if(!ctx)return;
+  charts[id]=new Chart(ctx,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},...opts}});
+}
+const gridColor='rgba(255,255,255,0.05)';
+const tickColor='#6e7681';
+
+function runDCF(){
+  const R=computeDCF(),price=g('price'),mktCap=price*30,upside=(R.intrinsic-price)/price*100;
+
+  // header cards
+  document.getElementById('c-iv').textContent='SAR '+f(R.intrinsic);
+  document.getElementById('c-pr').textContent='SAR '+f(price,2);
+  document.getElementById('c-ev').textContent=f(R.ev)+'M';
+  document.getElementById('c-pvf').textContent=f(R.sumPV)+'M';
+  document.getElementById('c-tv').textContent=f(R.pvTV/R.ev*100)+'%';
+  const uc=upside>=20?'up':upside>=-5?'neu':'dn';
+  document.getElementById('c-up').textContent=(upside>=0?'+':'')+f(upside)+'%';
+  document.getElementById('c-up').style.color=upside>=20?'var(--green)':upside>=-5?'var(--amber)':'var(--red)';
+  document.getElementById('c-up-note').textContent=upside>=20?'Undervalued ▲':upside>=-5?'Fair value':'Overvalued ▼';
+  document.getElementById('c-up-note').className='card-note '+uc;
+  document.getElementById('c-iv-note').textContent=(upside>=0?'▲ ':' ▼')+f(Math.abs(upside))+'% '+(upside>=0?'upside':'downside');
+  document.getElementById('c-iv-note').className='card-note '+uc;
+
+  // verdict
+  const vt=upside>=20?'Undervalued — Potential Buy':upside>=-5?'Fairly Valued — Hold / Monitor':'Overvalued — Exercise Caution';
+  document.getElementById('verdict').innerHTML=`<div class="verdict ${uc}"><strong>${vt}</strong><br>
+  Intrinsic value <strong>SAR ${f(R.intrinsic)}</strong> vs market <strong>SAR ${f(price,2)}</strong> → 
+  <strong>${upside>=0?f(upside)+'% upside':f(Math.abs(upside))+'% downside'}</strong>. 
+  Terminal value = ${f(R.pvTV/R.ev*100)}% of EV${R.pvTV/R.ev>.75?' (high — run bear-case sensitivity)':''}. 
+  WACC ${g('wacc')}% · TGR ${g('tgr')}% · Zakat ${g('tax_r')}%.</div>`;
+
+  // multiples
+  const ni=75.3,ebitda=174.2;
+  document.querySelector('#mult-tbl tbody').innerHTML=`
+    <tr><td>P / E</td><td>${f(mktCap/ni,1)}x</td><td>${f(R.equity/ni,1)}x</td>
+        <td style="color:${R.equity/ni>mktCap/ni?'var(--red)':'var(--green)'}">${f(R.equity/ni-mktCap/ni,1)}x diff</td><td style="color:var(--muted)">NI SAR 75.3M</td></tr>
+    <tr><td>EV / EBITDA</td><td>${f(mktCap/ebitda,1)}x</td><td>${f(R.ev/ebitda,1)}x</td>
+        <td style="color:${R.ev/ebitda>mktCap/ebitda?'var(--red)':'var(--green)'}">${f(R.ev/ebitda-mktCap/ebitda,1)}x diff</td><td style="color:var(--muted)">EBITDA SAR 174.2M</td></tr>
+    <tr><td>Market Cap (SAR M)</td><td>${f(mktCap,0)}</td><td>${f(R.equity,0)}</td>
+        <td style="color:${R.equity>mktCap?'var(--green)':'var(--red)'}">${f(R.equity-mktCap,0)}</td><td style="color:var(--muted)">Equity value diff</td></tr>`;
+
+  // bridge chart
+  mkChart('bridgeChart','bar',
+    ['PV FCFFs','PV Terminal Value','Enterprise Value','Net Debt','Equity Value'],
+    [{data:[+R.sumPV.toFixed(0),+R.pvTV.toFixed(0),+R.ev.toFixed(0),+g('netdebt').toFixed(0),+R.equity.toFixed(0)],
+      backgroundColor:['rgba(63,185,80,.7)','rgba(88,166,255,.7)','rgba(210,153,34,.7)','rgba(248,81,73,.7)','rgba(63,185,80,.9)'],borderWidth:0}],
+    {scales:{y:{ticks:{color:tickColor,callback:v=>'SAR '+v.toLocaleString()},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10}},grid:{display:false}}}});
+
+  // DCF table
+  const actuals=[582.8,84.8,82.7,89.1,104.9,null,null,null,null];
+  const rowDefs=[
+    {lbl:'Revenue',vals:R.revs,bold:false,act:582.8},
+    {lbl:'× EBIT margin',vals:R.ebits,bold:false,act:84.8},
+    {lbl:'NOPAT (after Zakat)',vals:R.nopats,bold:false,act:82.7},
+    {lbl:'+ D&A',vals:R.das,bold:false,act:89.1},
+    {lbl:'− CAPEX',vals:R.capexs,bold:false,act:104.9},
+    {lbl:'− ΔWCAP',vals:R.dwcs,bold:false,act:null},
+    {lbl:'= FCFF',vals:R.fcffs,bold:true,hl:true,act:null},
+    {lbl:'Discount factor',vals:Array.from({length:5},(_,i)=>1/Math.pow(1+g('wacc')/100,i+1)),bold:false,act:null,dec:4},
+    {lbl:'= PV of FCFF',vals:R.pvs,bold:true,hl:true,act:null},
+  ];
+  let thead='<thead><tr><th>Line (SAR M)</th><th>2024A</th>';
+  for(let i=1;i<=5;i++)thead+=`<th>Y${i}</th>`;
+  thead+='</tr></thead><tbody>';
+  rowDefs.forEach(r=>{
+    thead+=`<tr class="${r.bold?'bold':''} ${r.hl?'hl':''}"><td>${r.lbl}</td><td style="color:var(--muted2)">${r.act!==null?fc(r.act):'—'}</td>`;
+    r.vals.forEach(v=>thead+=`<td>${r.dec?v.toFixed(r.dec):fc(v)}</td>`);
+    thead+='</tr>';
+  });
+  document.getElementById('dcf-tbl').innerHTML=thead+'</tbody>';
+
+  // PV table
+  let pvh='<tbody>';
+  R.pvs.forEach((pv,i)=>pvh+=`<tr><td>PV of FCFF — Year ${i+1}</td><td>${f(pv)}</td></tr>`);
+  pvh+=`<tr class="bold"><td>Sum of PV (FCFFs)</td><td>${f(R.sumPV)}</td></tr>
+  <tr><td>Terminal value</td><td>${f(R.tv)}</td></tr>
+  <tr><td>PV of terminal value</td><td>${f(R.pvTV)}</td></tr>
+  <tr class="bold hl"><td>Enterprise Value</td><td>${f(R.ev)}</td></tr>
+  <tr><td>Less: Net debt</td><td>(${f(g('netdebt'))})</td></tr>
+  <tr class="bold"><td>Equity Value</td><td>${f(R.equity)}</td></tr>
+  <tr class="bold hl"><td>Intrinsic Value / Share (SAR)</td><td>${f(R.intrinsic)}</td></tr></tbody>`;
+  document.getElementById('pv-tbl').innerHTML=pvh;
+
+  // projection chart
+  mkChart('projChart','bar',['Y1','Y2','Y3','Y4','Y5'],[
+    {label:'Revenue',data:R.revs.map(v=>+v.toFixed(0)),backgroundColor:'rgba(88,166,255,0.45)',borderWidth:0,yAxisID:'y1'},
+    {label:'FCFF',data:R.fcffs.map(v=>+v.toFixed(0)),backgroundColor:R.fcffs.map(v=>v>=0?'rgba(63,185,80,0.8)':'rgba(248,81,73,0.8)'),borderWidth:0,yAxisID:'y'},
+  ],{scales:{
+    y:{ticks:{color:tickColor,callback:v=>'SAR '+v},grid:{color:gridColor},title:{display:true,text:'FCFF',color:tickColor,font:{size:10}}},
+    y1:{position:'right',ticks:{color:tickColor,callback:v=>'SAR '+v},grid:{drawOnChartArea:false},title:{display:true,text:'Revenue',color:tickColor,font:{size:10}}},
+    x:{ticks:{color:tickColor},grid:{display:false}}}});
+
+  buildSens();
+}
+
+function buildSens(){
+  const price=g('price'),cw=g('wacc'),ct=g('tgr'),cg=g('g1');
+  const waccs=[7.5,8.5,9.5,10.5,11.5],tgrs=[1.5,2.0,3.0,4.0,4.5],growths=[5,10,15,20,25];
+  function cell(iv,cur){
+    const up=(iv-price)/price*100;
+    const cls=up>=20?'s-hi':up>=-5?'s-mid':'s-lo';
+    return`<td class="${cls}${cur?' s-cur':''}">${f(iv)}</td>`;
+  }
+  let h1=`<tr><th>WACC ↓ / TGR →</th>${tgrs.map(t=>`<th>${t}%</th>`).join('')}</tr>`,r1='';
+  waccs.forEach(w=>{
+    r1+=`<tr><td style="font-weight:600;color:var(--muted)">${w}%</td>`;
+    tgrs.forEach(t=>r1+=cell(computeDCF({wacc:w,tgr:t}).intrinsic,Math.abs(w-cw)<.1&&Math.abs(t-ct)<.1));
+    r1+='</tr>';
+  });
+  document.getElementById('sens1').innerHTML=h1+r1;
+
+  let h2=`<tr><th>WACC ↓ / Y1 Growth →</th>${growths.map(g=>`<th>${g}%</th>`).join('')}</tr>`,r2='';
+  waccs.forEach(w=>{
+    r2+=`<tr><td style="font-weight:600;color:var(--muted)">${w}%</td>`;
+    growths.forEach(gr=>r2+=cell(computeDCF({wacc:w,g1:gr}).intrinsic,Math.abs(w-cw)<.1&&Math.abs(gr-cg)<.1));
+    r2+='</tr>';
+  });
+  document.getElementById('sens2').innerHTML=h2+r2;
+}
+
+// ── HISTORY (localStorage) ──
+function getH(){try{return JSON.parse(localStorage.getItem('aljouf_hist')||'[]')}catch{return[]}}
+function setH(h){localStorage.setItem('aljouf_hist',JSON.stringify(h))}
+
+function saveScenario(){
+  const R=computeDCF(),price=g('price'),upside=(R.intrinsic-price)/price*100;
+  const s={
+    id:Date.now(),
+    name:document.getElementById('scenName').value.trim()||'Scenario '+new Date().toLocaleDateString('en-GB'),
+    date:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+    intrinsic:+R.intrinsic.toFixed(2),price:+price.toFixed(2),upside:+upside.toFixed(2),
+    ev:+R.ev.toFixed(0),equity:+R.equity.toFixed(0),
+    wacc:g('wacc'),tgr:g('tgr'),g1:g('g1'),g2:g('g2'),g3:g('g3'),g4:g('g4'),g5:g('g5'),
+    ebit_m:g('ebit_m'),tax_r:g('tax_r'),da_p:g('da_p'),cap_p:g('cap_p'),wc_p:g('wc_p'),netdebt:g('netdebt'),
+  };
+  const h=getH();h.unshift(s);if(h.length>25)h.pop();
+  setH(h);renderHistory(s.id);
+}
+
+function loadScenario(id){
+  const s=getH().find(x=>x.id===id);if(!s)return;
+  ['wacc','tgr','g1','g2','g3','g4','g5','ebit_m','tax_r','da_p','cap_p','wc_p','netdebt','price'].forEach(k=>{
+    const el=document.getElementById(k);if(el)el.value=s[k];
+  });
+  document.getElementById('hdr-price').textContent='SAR '+s.price;
+  document.getElementById('scenName').value=s.name;
+  runDCF();
+  renderHistory(id);
+}
+
+function delScenario(id,e){
+  e.stopPropagation();
+  const h=getH().filter(x=>x.id!==id);setH(h);renderHistory();
+}
+
+function clearAll(){
+  if(confirm('Delete all saved scenarios?')){localStorage.removeItem('aljouf_hist');renderHistory();}}
+
+function renderHistory(activeId){
+  const h=getH(),el=document.getElementById('hist-list');
+  if(!h.length){
+    el.innerHTML='<div class="hist-empty">No scenarios saved yet.<br>Run DCF, then click<br><strong style="color:var(--text)">⊕ Save scenario</strong></div>';
+    return;
+  }
+  el.innerHTML=h.map(s=>`
+    <div class="hist-item${s.id===activeId?' active-scenario':''}" onclick="loadScenario(${s.id})">
+      <button class="hist-del" onclick="delScenario(${s.id},event)" title="Delete">✕</button>
+      <div class="hist-ticker">ALJOUF · 6070</div>
+      <div class="hist-iv">SAR ${s.intrinsic.toFixed(1)}</div>
+      <div class="hist-signal ${s.upside>=20?'up':s.upside>=-5?'neu':'dn'}">
+        ${s.upside>=0?'▲':'▼'} ${Math.abs(s.upside).toFixed(1)}%
+        ${s.upside>=20?' Undervalued':s.upside>=-5?' Fair value':' Overvalued'}
+      </div>
+      <div class="hist-meta">WACC ${s.wacc}% · TGR ${s.tgr}% · Y1 ${s.g1}%</div>
+      <div class="hist-name">${s.name}</div>
+      <div class="hist-meta" style="color:var(--muted2)">${s.date}</div>
+    </div>`).join('');
+}
+
+renderHistory();
+runDCF();
+</script>
+</body>
+</html>
